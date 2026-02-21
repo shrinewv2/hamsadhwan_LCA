@@ -1,0 +1,64 @@
+"""Structured logging setup for the LCA system."""
+import logging
+import sys
+from typing import Optional
+
+import structlog
+
+
+def setup_logging(log_level: str = "INFO") -> None:
+    """Configure structured logging with structlog."""
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.StackInfoRenderer(),
+            structlog.dev.set_exc_info,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer() if sys.stderr.isatty() else structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, log_level, logging.INFO)),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+
+def get_logger(name: str = "lca") -> structlog.BoundLogger:
+    """Get a named structured logger."""
+    return structlog.get_logger(name)
+
+
+# In-memory log buffer for SSE streaming
+_log_buffers: dict[str, list[dict]] = {}
+
+
+def init_job_log_buffer(job_id: str) -> None:
+    """Initialize a log buffer for a job."""
+    _log_buffers[job_id] = []
+
+
+def append_job_log(job_id: str, level: str, agent: str, file_id: Optional[str], message: str) -> None:
+    """Append a log entry to the job's log buffer."""
+    from datetime import datetime
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "level": level,
+        "agent": agent,
+        "file_id": file_id,
+        "message": message,
+    }
+    if job_id not in _log_buffers:
+        _log_buffers[job_id] = []
+    _log_buffers[job_id].append(entry)
+
+
+def get_job_logs(job_id: str, since_index: int = 0) -> list[dict]:
+    """Get log entries for a job since a given index."""
+    buffer = _log_buffers.get(job_id, [])
+    return buffer[since_index:]
+
+
+def clear_job_log_buffer(job_id: str) -> None:
+    """Clear the log buffer for a job."""
+    _log_buffers.pop(job_id, None)

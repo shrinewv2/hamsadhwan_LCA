@@ -1,0 +1,15 @@
+/.env.example
+/node_modules
+/dist
+/build  
+/coverage
+.DS_Store
+*.log
+*.env.example
+*.env
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+*.iml
+*.swp
