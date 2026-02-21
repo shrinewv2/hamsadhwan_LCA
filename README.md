@@ -1,7 +1,5 @@
 # Project Summary — LCA Multi-Agent Analysis System
 
-This document summarizes what was implemented in the repository, how the system is organized, how to run it locally and with Docker, known issues and recommended next steps.
-
 **Project Overview**
 - Purpose: Multi-agent document analysis system for Life Cycle Assessment (LCA) files. It ingests heterogeneous documents (Excel, PDF, images, mindmaps), routes each file to a specialist agent, extracts structured LCA data, validates against LCA taxonomies/rules, synthesizes cross-document findings, and produces Markdown and JSON reports.
 - Location: All source is under the `lca-analysis-system` folder in this workspace.
