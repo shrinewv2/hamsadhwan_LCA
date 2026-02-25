@@ -1,20 +1,41 @@
-/.env.example
-/node_modules
-/dist
-/build  
-/coverage
-.DS_Store
-*.log
-*.env.example
+# ─── Secrets — never commit real env files ───
+.env
 *.env
-.idea
-.vscode
+# .env.example is safe to commit (template only, no real credentials)
+
+# ─── Dependencies ───
+node_modules/
+**/node_modules/
+
+# ─── Build outputs ───
+/dist
+/build
+**/dist/
+**/build/
+/coverage
+
+# ─── OS / Editor ───
+.DS_Store
+.idea/
+.vscode/
 *.sublime-project
 *.sublime-workspace
 *.iml
 *.swp
-# Ignore large artifacts and local environments
-lca-analysis-system/awscliv2.zip
+
+# ─── Logs ───
+*.log
+
+# ─── Python ───
 lca-analysis-system/venv/
 lca-analysis-system/**/__pycache__/
-lca-analysis-system/frontend/node_modules/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# ─── Large local artifacts ───
+lca-analysis-system/awscliv2.zip
+nul
