@@ -370,6 +370,3 @@ Please ensure all Python code passes `ruff` linting and `mypy` type checks befor
 
 ---
 
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
