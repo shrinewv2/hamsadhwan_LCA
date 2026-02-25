@@ -4,6 +4,7 @@ from typing import Any
 
 import structlog
 
+from backend.config import settings
 from backend.storage.s3_client import upload_json
 from backend.validation.lca_taxonomy import LIFE_CYCLE_STAGES
 
@@ -102,7 +103,7 @@ async def build_viz_data(
     # Store to S3
     s3_key = f"reports/{job_id}/viz_data.json"
     try:
-        await upload_json(s3_key, viz_data)
+        upload_json(settings.S3_BUCKET_REPORTS if settings else "lca-reports", s3_key, viz_data)
         logger.info("viz_data_uploaded", job_id=job_id, s3_key=s3_key)
     except Exception as e:
         logger.error("viz_data_upload_failed", job_id=job_id, error=str(e))

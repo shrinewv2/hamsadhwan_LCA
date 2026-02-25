@@ -9,7 +9,7 @@ logger = get_logger("image_agent")
 
 
 class ImageVLMAgent(BaseAgent):
-    agent_name = "image_vlm_agent"
+    agent_name = "image_agent"
 
     def process(self, file_meta: FileMetadata, file_bytes: bytes) -> ParsedOutput:
         warnings = []
@@ -90,3 +90,7 @@ class ImageVLMAgent(BaseAgent):
             word_count=len(full_markdown.split()),
             warnings=warnings,
         )
+
+
+class ImageAgent(ImageVLMAgent):
+    pass

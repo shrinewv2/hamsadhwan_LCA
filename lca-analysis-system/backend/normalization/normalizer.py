@@ -77,10 +77,11 @@ def normalize_all(outputs: List[ParsedOutput]) -> List[ParsedOutput]:
     """Normalize a list of ParsedOutputs."""
     normalized = []
     for out in outputs:
+        parsed_out = out if isinstance(out, ParsedOutput) else ParsedOutput.model_validate(out)
         try:
-            normalized.append(normalize_output(out))
+            normalized.append(normalize_output(parsed_out))
         except Exception as e:
-            logger.error("normalization_failed", file_id=out.file_id, error=str(e))
-            out.errors.append(f"Normalization error: {str(e)}")
-            normalized.append(out)
+            logger.error("normalization_failed", file_id=parsed_out.file_id, error=str(e))
+            parsed_out.errors.append(f"Normalization error: {str(e)}")
+            normalized.append(parsed_out)
     return normalized

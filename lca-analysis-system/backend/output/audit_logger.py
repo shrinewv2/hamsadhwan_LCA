@@ -6,6 +6,7 @@ from typing import Any
 
 import structlog
 
+from backend.config import settings
 from backend.storage.s3_client import upload_json
 
 logger = structlog.get_logger(__name__)
@@ -78,7 +79,7 @@ async def build_audit_trail(
     # Store to S3
     s3_key = f"audit/{job_id}/audit.json"
     try:
-        await upload_json(s3_key, audit)
+        upload_json(settings.S3_BUCKET_AUDIT if settings else "lca-audit-logs", s3_key, audit)
         logger.info("audit_trail_uploaded", job_id=job_id, s3_key=s3_key)
     except Exception as e:
         logger.error("audit_trail_upload_failed", job_id=job_id, error=str(e))

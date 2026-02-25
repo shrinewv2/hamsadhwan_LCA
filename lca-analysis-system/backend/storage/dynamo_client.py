@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from backend.config import settings
@@ -107,7 +107,7 @@ def get_files_by_job(job_id: str) -> List[Dict[str, Any]]:
     except ClientError:
         # If GSI doesn't exist, fall back to scan
         response = table.scan(
-            FilterExpression=Key("job_id").eq(job_id)
+            FilterExpression=Attr("job_id").eq(job_id)
         )
         return [_convert_decimals(item) for item in response.get("Items", [])]
 
@@ -118,16 +118,26 @@ def put_analysis_record(record: Dict[str, Any]) -> None:
     """Write an analysis (job) record to the analyses table."""
     resource = _get_dynamo_resource()
     table = resource.Table(settings.DYNAMO_TABLE_ANALYSES if settings else "lca-analyses")
-    table.put_item(Item=_convert_floats(record))
+    item = dict(record)
+    analysis_id = item.get("analysis_id") or item.get("job_id")
+    if analysis_id:
+        item["analysis_id"] = analysis_id
+    table.put_item(Item=_convert_floats(item))
 
 
-def get_analysis_record(job_id: str) -> Optional[Dict[str, Any]]:
+def get_analysis_record_sync(job_id: str) -> Optional[Dict[str, Any]]:
     """Get an analysis record by job_id."""
     resource = _get_dynamo_resource()
     table = resource.Table(settings.DYNAMO_TABLE_ANALYSES if settings else "lca-analyses")
-    response = table.get_item(Key={"job_id": job_id})
+    response = table.get_item(Key={"analysis_id": job_id})
     item = response.get("Item")
+    if item and "job_id" not in item:
+        item["job_id"] = item.get("analysis_id", job_id)
     return _convert_decimals(item) if item else None
+
+
+async def get_analysis_record(job_id: str) -> Optional[Dict[str, Any]]:
+    return get_analysis_record_sync(job_id)
 
 
 def update_analysis_status(job_id: str, status: str, extra_attrs: Optional[Dict[str, Any]] = None) -> None:
@@ -148,8 +158,28 @@ def update_analysis_status(job_id: str, status: str, extra_attrs: Optional[Dict[
             expr_values[val_alias] = _convert_floats(v)
 
     table.update_item(
-        Key={"job_id": job_id},
+        Key={"analysis_id": job_id},
         UpdateExpression=update_expr,
         ExpressionAttributeNames=expr_names,
         ExpressionAttributeValues=expr_values,
     )
+
+
+# ──────────────────── Async Compatibility Layer ────────────────────
+
+async def get_file_records_for_job(job_id: str) -> List[Dict[str, Any]]:
+    return get_files_by_job(job_id)
+
+
+async def update_file_record(file_id: str, attrs: Dict[str, Any]) -> None:
+    current = get_file_record(file_id) or {}
+    status = attrs.get("status") or current.get("status") or "PENDING"
+    extra_attrs = {k: v for k, v in attrs.items() if k != "status"}
+    update_file_status(file_id, status, extra_attrs=extra_attrs)
+
+
+async def update_analysis_record(job_id: str, attrs: Dict[str, Any]) -> None:
+    current = get_analysis_record_sync(job_id) or {}
+    status = attrs.get("status") or current.get("status") or "PENDING"
+    extra_attrs = {k: v for k, v in attrs.items() if k != "status"}
+    update_analysis_status(job_id, status, extra_attrs=extra_attrs)

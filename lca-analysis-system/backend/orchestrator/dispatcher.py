@@ -10,7 +10,9 @@ from backend.agents.generic_agent import GenericAgent
 from backend.agents.image_agent import ImageAgent
 from backend.agents.mindmap_agent import MindMapAgent
 from backend.agents.pdf_agent import PDFHybridAgent, PDFScannedAgent, PDFTextAgent
-from backend.models.enums import AgentType
+from backend.config import settings
+from backend.models.enums import AgentType, FileStatus, FileType
+from backend.models.schemas import FileMetadata
 from backend.storage.dynamo_client import update_file_record
 from backend.storage.s3_client import download_bytes
 from backend.utils.logger import append_job_log
@@ -19,13 +21,14 @@ logger = structlog.get_logger(__name__)
 
 # Agent registry
 AGENT_CLASSES = {
-    AgentType.EXCEL.value: ExcelAgent,
-    AgentType.PDF_HYBRID.value: PDFHybridAgent,
-    AgentType.PDF_TEXT.value: PDFTextAgent,
-    AgentType.PDF_SCANNED.value: PDFScannedAgent,
-    AgentType.IMAGE.value: ImageAgent,
-    AgentType.MINDMAP.value: MindMapAgent,
-    AgentType.GENERIC.value: GenericAgent,
+    AgentType.EXCEL_AGENT.value: ExcelAgent,
+    AgentType.PDF_HYBRID_AGENT.value: PDFHybridAgent,
+    AgentType.PDF_TEXT_AGENT.value: PDFTextAgent,
+    AgentType.PDF_SCANNED_AGENT.value: PDFScannedAgent,
+    AgentType.IMAGE_VLM_AGENT.value: ImageAgent,
+    AgentType.MINDMAP_AGENT.value: MindMapAgent,
+    AgentType.GENERIC_AGENT.value: GenericAgent,
+    "image_agent": ImageAgent,
 }
 
 
@@ -64,7 +67,10 @@ async def dispatch_file(task: dict[str, Any]) -> dict[str, Any]:
         await update_file_record(file_id, {"status": "PROCESSING", "agent": agent_name})
 
         # Download file bytes from S3
-        file_bytes = await download_bytes(s3_key)
+        file_bytes = download_bytes(
+            settings.S3_BUCKET_UPLOADS if settings else "lca-uploads",
+            s3_key,
+        )
 
         # Instantiate agent
         agent_class = AGENT_CLASSES.get(agent_name)
@@ -73,20 +79,32 @@ async def dispatch_file(task: dict[str, Any]) -> dict[str, Any]:
 
         agent = agent_class()
 
-        # Build context for the agent
-        context = {
-            "file_id": file_id,
-            "job_id": job_id,
-            "filename": filename,
-            "file_type": file_type,
-            "s3_key": s3_key,
-            "file_bytes": file_bytes,
-            "pdf_structure": task.get("pdf_structure"),
-            "excel_structure": task.get("excel_structure"),
-        }
+        # Build file metadata for the agent
+        try:
+            resolved_file_type = FileType(file_type)
+        except Exception:
+            resolved_file_type = FileType.UNKNOWN
+
+        file_meta = FileMetadata(
+            file_id=file_id,
+            job_id=job_id,
+            original_name=filename,
+            s3_key=s3_key,
+            actual_mime="application/octet-stream",
+            file_type=resolved_file_type,
+            size_bytes=len(file_bytes),
+            is_scanned=bool((task.get("pdf_structure") or {}).get("is_scanned", False)),
+            has_text_layer=bool((task.get("pdf_structure") or {}).get("has_text_layer", False)),
+            has_embedded_images=bool((task.get("pdf_structure") or {}).get("has_embedded_images", False)),
+            page_count=(task.get("pdf_structure") or {}).get("page_count"),
+            sheet_count=(task.get("excel_structure") or {}).get("sheet_count"),
+            complexity_score=0.0,
+            status=FileStatus.PROCESSING,
+            agent_assigned=agent_name,
+        )
 
         # Run agent processing
-        result = await agent.safe_process(context)
+        result = agent.safe_process(file_meta, file_bytes)
 
         processing_time = time.time() - start_time
 
@@ -97,15 +115,15 @@ async def dispatch_file(task: dict[str, Any]) -> dict[str, Any]:
             "filename": filename,
             "file_type": file_type,
             "agent": agent_name,
-            "markdown": result.get("markdown", ""),
-            "structured_json": result.get("structured_json", {}),
-            "lca_relevant": result.get("lca_relevant", False),
-            "confidence": result.get("confidence", 0.0),
-            "low_confidence_pages": result.get("low_confidence_pages", []),
-            "word_count": len(result.get("markdown", "").split()),
+            "markdown": result.markdown,
+            "structured_json": result.structured_json,
+            "lca_relevant": result.lca_relevant,
+            "confidence": result.confidence,
+            "low_confidence_pages": result.low_confidence_pages,
+            "word_count": len(result.markdown.split()),
             "processing_time_s": round(processing_time, 2),
-            "errors": result.get("errors", []),
-            "warnings": result.get("warnings", []),
+            "errors": result.errors,
+            "warnings": result.warnings,
             "status": "COMPLETED",
         }
 

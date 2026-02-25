@@ -11,14 +11,14 @@ logger = structlog.get_logger(__name__)
 
 # ─── Deterministic routing table ───
 FILE_TYPE_TO_AGENT: dict[FileType, AgentType] = {
-    FileType.EXCEL: AgentType.EXCEL,
-    FileType.CSV: AgentType.EXCEL,
-    FileType.IMAGE: AgentType.IMAGE,
-    FileType.MINDMAP_XMIND: AgentType.MINDMAP,
-    FileType.MINDMAP_FREEMIND: AgentType.MINDMAP,
-    FileType.DOCX: AgentType.GENERIC,
-    FileType.TEXT: AgentType.GENERIC,
-    FileType.PPTX: AgentType.GENERIC,
+    FileType.EXCEL: AgentType.EXCEL_AGENT,
+    FileType.CSV: AgentType.EXCEL_AGENT,
+    FileType.IMAGE: AgentType.IMAGE_VLM_AGENT,
+    FileType.MINDMAP_XMIND: AgentType.MINDMAP_AGENT,
+    FileType.MINDMAP_FREEMIND: AgentType.MINDMAP_AGENT,
+    FileType.DOCX: AgentType.GENERIC_AGENT,
+    FileType.TEXT: AgentType.GENERIC_AGENT,
+    FileType.PPTX: AgentType.GENERIC_AGENT,
 }
 
 
@@ -67,22 +67,22 @@ async def route_file(
 
         if is_scanned:
             return {
-                "agent": AgentType.PDF_SCANNED.value,
+                "agent": AgentType.PDF_SCANNED_AGENT.value,
                 "reason": "Fully scanned PDF detected — using OCR-focused agent",
             }
         elif has_images or has_tables:
             return {
-                "agent": AgentType.PDF_HYBRID.value,
+                "agent": AgentType.PDF_HYBRID_AGENT.value,
                 "reason": "PDF with mixed content (text + images/tables) — using hybrid agent",
             }
         elif has_text:
             return {
-                "agent": AgentType.PDF_TEXT.value,
+                "agent": AgentType.PDF_TEXT_AGENT.value,
                 "reason": "Text-only PDF — using text extraction agent",
             }
         else:
             return {
-                "agent": AgentType.PDF_HYBRID.value,
+                "agent": AgentType.PDF_HYBRID_AGENT.value,
                 "reason": "PDF structure unclear — defaulting to hybrid agent",
             }
 
@@ -126,7 +126,7 @@ async def route_file(
 
     # Ultimate fallback
     return {
-        "agent": AgentType.GENERIC.value,
+        "agent": AgentType.GENERIC_AGENT.value,
         "reason": f"Unknown file type '{file_type}' — defaulting to generic agent",
     }
 

@@ -38,15 +38,39 @@ def init_job_log_buffer(job_id: str) -> None:
     _log_buffers[job_id] = []
 
 
-def append_job_log(job_id: str, level: str, agent: str, file_id: Optional[str], message: str) -> None:
-    """Append a log entry to the job's log buffer."""
+def append_job_log(
+    job_id: str,
+    level: str,
+    agent: str,
+    file_id_or_message: Optional[str],
+    message: Optional[str] = None,
+    *,
+    file_id: Optional[str] = None,
+) -> None:
+    """Append a log entry to the job's log buffer.
+
+    Supports both:
+    - append_job_log(job_id, level, agent, file_id, message)
+    - append_job_log(job_id, level, agent, message)
+    """
     from datetime import datetime
+
+    if file_id is not None:
+        final_file_id = file_id
+        final_message = message if message is not None else (file_id_or_message or "")
+    elif message is None:
+        final_file_id = None
+        final_message = file_id_or_message or ""
+    else:
+        final_file_id = file_id_or_message
+        final_message = message
+
     entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "level": level,
         "agent": agent,
-        "file_id": file_id,
-        "message": message,
+        "file_id": final_file_id,
+        "message": final_message,
     }
     if job_id not in _log_buffers:
         _log_buffers[job_id] = []

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTasks
 
-from backend.config import get_settings
+from backend.config import get_settings, settings as app_settings
 from backend.ingestion.router import router as ingestion_router
 from backend.models.schemas import ErrorResponse, HealthResponse
 from backend.orchestrator.graph import run_pipeline
@@ -135,25 +135,28 @@ async def get_job_report(job_id: str):
         viz_data = {}
         audit_summary = {}
 
+        reports_bucket = app_settings.S3_BUCKET_REPORTS if app_settings else "lca-reports"
+        audit_bucket = app_settings.S3_BUCKET_AUDIT if app_settings else "lca-audit-logs"
+
         try:
-            markdown_report = await download_text(report_key)
+            markdown_report = download_text(reports_bucket, report_key)
         except Exception:
             logger.warning("report_download_failed", key=report_key)
 
         try:
-            json_text = await download_text(json_key)
+            json_text = download_text(reports_bucket, json_key)
             structured_json = json.loads(json_text)
         except Exception:
             logger.warning("analysis_json_download_failed", key=json_key)
 
         try:
-            viz_text = await download_text(viz_key)
+            viz_text = download_text(reports_bucket, viz_key)
             viz_data = json.loads(viz_text)
         except Exception:
             logger.warning("viz_data_download_failed", key=viz_key)
 
         try:
-            audit_text = await download_text(audit_key)
+            audit_text = download_text(audit_bucket, audit_key)
             audit_summary = json.loads(audit_text)
         except Exception:
             logger.warning("audit_download_failed", key=audit_key)
@@ -181,8 +184,9 @@ async def get_job_report(job_id: str):
 async def download_report(job_id: str):
     """Stream the Markdown report as a file download."""
     try:
+        reports_bucket = app_settings.S3_BUCKET_REPORTS if app_settings else "lca-reports"
         report_key = f"reports/{job_id}/full_report.md"
-        content = await download_text(report_key)
+        content = download_text(reports_bucket, report_key)
 
         return StreamingResponse(
             iter([content.encode("utf-8")]),
@@ -201,8 +205,9 @@ async def download_report(job_id: str):
 async def download_json(job_id: str):
     """Stream the structured JSON as a file download."""
     try:
+        reports_bucket = app_settings.S3_BUCKET_REPORTS if app_settings else "lca-reports"
         json_key = f"reports/{job_id}/analysis.json"
-        content = await download_text(json_key)
+        content = download_text(reports_bucket, json_key)
 
         return StreamingResponse(
             iter([content.encode("utf-8")]),
@@ -221,8 +226,9 @@ async def download_json(job_id: str):
 async def download_audit(job_id: str):
     """Stream the audit trail JSON as a file download."""
     try:
+        audit_bucket = app_settings.S3_BUCKET_AUDIT if app_settings else "lca-audit-logs"
         audit_key = f"audit/{job_id}/audit.json"
-        content = await download_text(audit_key)
+        content = download_text(audit_bucket, audit_key)
 
         return StreamingResponse(
             iter([content.encode("utf-8")]),

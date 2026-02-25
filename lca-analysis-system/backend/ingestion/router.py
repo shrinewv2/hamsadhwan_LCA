@@ -21,14 +21,33 @@ from backend.utils.logger import append_job_log, get_logger, init_job_log_buffer
 
 logger = get_logger("ingestion")
 
-router = APIRouter(prefix="/api/v1", tags=["ingestion"])
+router = APIRouter(tags=["ingestion"])
 
 
 async def _process_job(job_id: str, file_metas: List[FileMetadata]):
     """Background task: trigger the orchestrator to process the job."""
     try:
         from backend.orchestrator.graph import run_pipeline
-        await run_pipeline(job_id, file_metas)
+        file_tasks = [
+            {
+                "file_id": meta.file_id,
+                "job_id": meta.job_id,
+                "filename": meta.original_name,
+                "file_type": meta.file_type.value,
+                "s3_key": meta.s3_key,
+                "pdf_structure": {
+                    "is_scanned": meta.is_scanned,
+                    "has_text_layer": meta.has_text_layer,
+                    "has_embedded_images": meta.has_embedded_images,
+                    "page_count": meta.page_count,
+                } if meta.file_type == FileType.PDF else None,
+                "excel_structure": {
+                    "sheet_count": meta.sheet_count,
+                } if meta.file_type == FileType.EXCEL else None,
+            }
+            for meta in file_metas
+        ]
+        await run_pipeline(job_id, file_tasks)
     except Exception as e:
         logger.error("pipeline_failed", job_id=job_id, error=str(e))
         append_job_log(job_id, "ERROR", "orchestrator", None, f"Pipeline failed: {str(e)}")

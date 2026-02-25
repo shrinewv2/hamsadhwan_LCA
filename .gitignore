@@ -13,3 +13,8 @@
 *.sublime-workspace
 *.iml
 *.swp
+# Ignore large artifacts and local environments
+lca-analysis-system/awscliv2.zip
+lca-analysis-system/venv/
+lca-analysis-system/**/__pycache__/
+lca-analysis-system/frontend/node_modules/

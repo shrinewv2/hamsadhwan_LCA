@@ -103,7 +103,11 @@ async def normalization_node(state: AgentState) -> dict[str, Any]:
     parsed_outputs = state.get("parsed_outputs", [])
     append_job_log(job_id, "INFO", "normalizer", "Starting normalization")
 
-    normalized = await normalize_all(parsed_outputs)
+    normalized_models = normalize_all(parsed_outputs)
+    normalized = [
+        item.model_dump() if hasattr(item, "model_dump") else item
+        for item in normalized_models
+    ]
 
     append_job_log(
         job_id, "INFO", "normalizer",

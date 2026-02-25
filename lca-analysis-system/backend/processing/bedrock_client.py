@@ -49,7 +49,7 @@ def invoke_claude(
         logger.warning("bedrock_mock_mode", detail="Returning mock response")
         return '{"mock": true, "message": "Bedrock is in mock mode"}'
 
-    model_id = model or (settings.BEDROCK_MODEL_SONNET if settings else "anthropic.claude-sonnet-4-6")
+    model_id = model or (settings.BEDROCK_MODEL_SONNET if settings else "us.anthropic.claude-sonnet-4-6")
 
     messages = [
         {"role": "user", "content": [{"text": prompt}]}
@@ -80,15 +80,26 @@ def invoke_claude(
     return result_text
 
 
-def invoke_claude_sonnet(prompt: str, system_prompt: str = "", max_tokens: int = 4096) -> str:
-    """Invoke Claude Sonnet for routing, validation, synthesis tasks."""
-    model = settings.BEDROCK_MODEL_SONNET if settings else "anthropic.claude-sonnet-4-6"
+async def invoke_claude_sonnet(
+    prompt: str,
+    system_prompt: str = "",
+    max_tokens: int = 4096,
+    **kwargs: Any,
+) -> str:
+    """Invoke Claude Sonnet for routing, validation, synthesis tasks.
+
+    Supports both `system_prompt=` and legacy `system=` keyword usage.
+    """
+    if kwargs.get("system") and not system_prompt:
+        system_prompt = kwargs["system"]
+
+    model = settings.BEDROCK_MODEL_SONNET if settings else "us.anthropic.claude-sonnet-4-6"
     return invoke_claude(prompt, system_prompt, model=model, max_tokens=max_tokens)
 
 
 def invoke_claude_haiku(prompt: str, system_prompt: str = "", max_tokens: int = 4096) -> str:
     """Invoke Claude Haiku for code gen, per-doc summaries."""
-    model = settings.BEDROCK_MODEL_HAIKU if settings else "anthropic.claude-haiku-4-5-20251001"
+    model = settings.BEDROCK_MODEL_HAIKU if settings else "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     return invoke_claude(prompt, system_prompt, model=model, max_tokens=max_tokens)
 
 
