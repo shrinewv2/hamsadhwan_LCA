@@ -1,7 +1,7 @@
 """Normalizer — converts all agent outputs to the unified ParsedOutput schema."""
 from typing import List
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.models.schemas import ParsedOutput
 from backend.normalization.markdown_converter import (
     deduplicate_consecutive_lines,
@@ -42,7 +42,8 @@ def normalize_output(output: ParsedOutput) -> ParsedOutput:
 
     # Step 6: Store to S3
     try:
-        bucket = settings.S3_BUCKET_PARSED if settings else "lca-parsed"
+        cfg = get_settings()
+        bucket = cfg.S3_BUCKET_PARSED
         md_key = f"parsed/{output.job_id}/{output.file_id}/content.md"
         s3_client.upload_text(bucket, md_key, output.markdown)
 

@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.ingestion.complexity_scorer import compute_complexity_score, estimate_processing_seconds
 from backend.ingestion.file_detector import detect_file_type, probe_pdf_structure
 from backend.ingestion.virus_scanner import scan_file
@@ -68,7 +68,8 @@ async def create_job(
     Accepts multipart/form-data with 1–20 files.
     """
     # Validate file count
-    max_files = settings.MAX_FILES_PER_JOB if settings else 20
+    cfg = get_settings()
+    max_files = cfg.MAX_FILES_PER_JOB
     if len(files) < 1:
         raise HTTPException(status_code=400, detail="At least 1 file is required")
     if len(files) > max_files:
@@ -78,7 +79,7 @@ async def create_job(
     init_job_log_buffer(job_id)
     append_job_log(job_id, "INFO", "ingestion", None, f"Job {job_id} created with {len(files)} files")
 
-    max_size = settings.max_file_size_bytes if settings else 100 * 1024 * 1024
+    max_size = cfg.max_file_size_bytes
     file_metas: List[FileMetadata] = []
     total_estimated_seconds = 0
 
@@ -98,7 +99,7 @@ async def create_job(
         if len(file_bytes) > max_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"File '{upload_file.filename}' exceeds maximum size of {settings.MAX_FILE_SIZE_MB if settings else 100} MB",
+                detail=f"File '{upload_file.filename}' exceeds maximum size of {cfg.MAX_FILE_SIZE_MB} MB",
             )
 
         # Virus scan
@@ -150,7 +151,7 @@ async def create_job(
         # Upload to S3
         try:
             s3_client.upload_file_bytes(
-                bucket=settings.S3_BUCKET_UPLOADS if settings else "lca-uploads",
+                bucket=cfg.S3_BUCKET_UPLOADS,
                 key=s3_key,
                 data=file_bytes,
                 content_type=detected_mime,

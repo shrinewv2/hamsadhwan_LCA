@@ -4,7 +4,7 @@ from typing import Any
 
 import structlog
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.storage.s3_client import upload_json
 from backend.validation.lca_taxonomy import LIFE_CYCLE_STAGES
 
@@ -60,7 +60,7 @@ async def build_viz_data(
     }
 
     # ─── Completeness Gauge ───
-    completeness = structured.get("completeness", 0.0)
+    completeness = structured.get("completeness") or 0.0
     viz_data["completeness_gauge"] = {
         "value": completeness,
         "label": f"{int(completeness * 100)}% Complete",
@@ -103,7 +103,8 @@ async def build_viz_data(
     # Store to S3
     s3_key = f"reports/{job_id}/viz_data.json"
     try:
-        upload_json(settings.S3_BUCKET_REPORTS if settings else "lca-reports", s3_key, viz_data)
+        cfg = get_settings()
+        upload_json(cfg.S3_BUCKET_REPORTS, s3_key, viz_data)
         logger.info("viz_data_uploaded", job_id=job_id, s3_key=s3_key)
     except Exception as e:
         logger.error("viz_data_upload_failed", job_id=job_id, error=str(e))

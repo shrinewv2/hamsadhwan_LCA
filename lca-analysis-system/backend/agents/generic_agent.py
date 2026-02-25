@@ -45,24 +45,22 @@ class GenericAgent(BaseAgent):
         if not markdown:
             markdown = f"# Unable to extract content from {file_meta.original_name}"
 
-        # LCA Section Detection via Claude Haiku
-        lca_sections = []
-        lca_relevant = False
-        structured = {"sections": [], "lca_sections": []}
+        # Section Detection via LLM
+        key_sections = []
+        structured = {"sections": [], "key_sections": []}
 
         if len(markdown) > 50:
-            lca_sections, all_sections = self._detect_lca_sections(markdown, file_meta)
+            key_sections, all_sections = self._detect_key_sections(markdown, file_meta)
             structured["sections"] = all_sections
-            structured["lca_sections"] = lca_sections
-            lca_relevant = len(lca_sections) > 0
+            structured["key_sections"] = key_sections
 
             # Build primary markdown from high-relevance sections
-            if lca_sections:
+            if key_sections:
                 primary_md = "\n\n".join([
                     f"## {s['section_title']}\n\n{s['content']}"
-                    for s in lca_sections
+                    for s in key_sections
                 ])
-                markdown = f"# LCA-Relevant Content from {file_meta.original_name}\n\n{primary_md}\n\n---\n\n# Full Document Content\n\n{markdown}"
+                markdown = f"# Key Content from {file_meta.original_name}\n\n{primary_md}\n\n---\n\n# Full Document Content\n\n{markdown}"
 
         return ParsedOutput(
             file_id=file_meta.file_id,
@@ -70,7 +68,7 @@ class GenericAgent(BaseAgent):
             agent=self.agent_name,
             markdown=markdown,
             structured_json=structured,
-            lca_relevant=lca_relevant,
+            lca_relevant=True,  # Let downstream analysis determine relevance
             confidence=0.75 if markdown else 0.1,
             word_count=len(markdown.split()),
         )
@@ -126,6 +124,20 @@ class GenericAgent(BaseAgent):
 
     def _convert_with_unstructured(self, file_bytes: bytes, file_meta: FileMetadata) -> str:
         """Convert file to Markdown using the unstructured library."""
+        import sys
+
+        # Skip unstructured on Windows due to import performance issues
+        if sys.platform == "win32":
+            logger.info("unstructured_skipped_on_windows")
+            # For txt files, just decode the content directly
+            ext = file_meta.original_name.rsplit(".", 1)[-1].lower() if "." in file_meta.original_name else ""
+            if ext in ("txt", "text"):
+                try:
+                    return file_bytes.decode("utf-8", errors="replace")
+                except Exception:
+                    return file_bytes.decode("latin-1", errors="replace")
+            return ""
+
         try:
             from unstructured.partition.auto import partition
 
@@ -166,28 +178,28 @@ class GenericAgent(BaseAgent):
             logger.warning("unstructured_error", error=str(e))
             return ""
 
-    def _detect_lca_sections(self, markdown: str, file_meta: FileMetadata) -> tuple:
-        """Use Claude Haiku to detect LCA-relevant sections."""
+    def _detect_key_sections(self, markdown: str, file_meta: FileMetadata) -> tuple:
+        """Use LLM to detect key sections in the document."""
         try:
             # Truncate if too long
             text = markdown[:8000] if len(markdown) > 8000 else markdown
 
             prompt = (
-                "Identify and extract sections from this document that are LCA-relevant. "
+                "Identify and extract the most important sections from this document. "
                 "Return a JSON array of objects with keys: section_title, content (brief excerpt), "
-                "lca_relevance_score (0-10). Only include sections with relevance >= 5.\n\n"
+                "relevance_score (0-10). Only include sections with relevance >= 5.\n\n"
                 f"Document:\n{text}"
             )
-            system = "You are an LCA expert. Return ONLY a JSON array, no explanation."
+            system = "You are a document analyst. Return ONLY a JSON array, no explanation."
             response = invoke_claude_haiku(prompt, system, max_tokens=2048)
 
             sections = parse_json_response(response)
             if not isinstance(sections, list):
                 sections = sections.get("sections", [])
 
-            lca_sections = [s for s in sections if s.get("lca_relevance_score", 0) >= 5]
-            return lca_sections, sections
+            key_sections = [s for s in sections if s.get("relevance_score", 0) >= 5]
+            return key_sections, sections
 
         except Exception as e:
-            logger.warning("lca_section_detection_failed", error=str(e))
+            logger.warning("section_detection_failed", error=str(e))
             return [], []

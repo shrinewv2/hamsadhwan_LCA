@@ -5,7 +5,7 @@ from typing import Any
 
 import structlog
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.storage.s3_client import upload_text
 
 logger = structlog.get_logger(__name__)
@@ -99,7 +99,8 @@ async def generate_report(
     # Store to S3
     s3_key = f"reports/{job_id}/full_report.md"
     try:
-        upload_text(settings.S3_BUCKET_REPORTS if settings else "lca-reports", s3_key, report)
+        cfg = get_settings()
+        upload_text(cfg.S3_BUCKET_REPORTS, s3_key, report)
         logger.info("report_uploaded_to_s3", job_id=job_id, s3_key=s3_key, length=len(report))
     except Exception as e:
         logger.error("report_s3_upload_failed", job_id=job_id, error=str(e))

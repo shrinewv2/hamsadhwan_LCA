@@ -18,8 +18,15 @@ Lifecycle Twin is a state-of-the-art **Multi-Agent System (MAS)** designed to au
 - **Backend**: FastAPI (Python 3.12+), Pydantic, Uvicorn.
 - **AI/ML**: AWS Bedrock (Llama 4 Maverick/Scout, Mistral Pixtral), LangChain/LangGraph.
 - **Infrastructure**: AWS S3 (Storage), AWS DynamoDB (Metadata), Docker & Docker Compose.
-- **Frontend**: React, Vite, Tailwind CSS, Shadcn UI.
+- **Frontend**: React, Vite, Tailwind CSS, Shadcn UI (Lucide Icons).
 - **Execution**: Local Sandbox for secure code execution during Excel parsing.
+
+## 📋 Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- Docker & Docker Compose
+- AWS CLI configured with appropriate credentials (Bedrock, S3, DynamoDB access)
 
 ## ⚙️ Project Structure
 
@@ -27,43 +34,53 @@ Lifecycle Twin is a state-of-the-art **Multi-Agent System (MAS)** designed to au
 ├── lca-analysis-system/
 │   ├── backend/            # FastAPI Application
 │   │   ├── agents/         # Specialized AI Agent logic
+│   │   ├── ingestion/      # File detection and routing
+│   │   ├── models/         # Pydantic schemas and enums
 │   │   ├── orchestrator/   # Graph-based workflow management
 │   │   └── storage/        # AWS DynamoDB & S3 clients
-│   ├── frontend/           # Vite + React Application (UI)
+│   ├── frontend/           # Vite + React Application
 │   ├── docker-compose.yml  # Container orchestration
-│   └── requirements.txt    # Python dependencies
+│   └── .env.example        # Environment variable template
 ```
 
 ## 🏃 Getting Started
 
-### 1. Environment Setup
-Copy the example environment file and fill in your credentials:
+### 1. Clone the Repository
 ```bash
-cd lca-analysis-system
+git clone https://github.com/krishnahn/multiagent_LCA.git
+cd multiagent_LCA/lca-analysis-system
+```
+
+### 2. Environment Configuration
+Copy `.env.example` to `.env` and fill in your AWS credentials and configuration:
+```bash
 cp .env.example .env
 ```
 
-### 2. Backend Setup
+### 3. Backend Setup
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r ../requirements.txt
 uvicorn backend.main:app --reload
 ```
 
-### 3. Frontend Setup
+### 4. Frontend Setup
 ```bash
 cd ../frontend
 npm install
 npm run dev
 ```
 
-### 4. Docker Deployment
+### 5. Docker Deployment (Optional)
 ```bash
-cd ..
 docker-compose up --build
 ```
 
+## 🛡️ License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
 ---
-**Developed for the LCA Community.**
+**Developed with ❤️ for the LCA Community.**

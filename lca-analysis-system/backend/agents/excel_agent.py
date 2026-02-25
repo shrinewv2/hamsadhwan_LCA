@@ -1,4 +1,4 @@
-"""Excel Agent — parse Excel/CSV files via E2B sandbox execution."""
+"""Excel Agent — parse Excel/CSV files via local sandbox execution."""
 import io
 import json
 from typing import Any, Dict, List
@@ -6,18 +6,10 @@ from typing import Any, Dict, List
 from backend.agents.base_agent import BaseAgent
 from backend.models.schemas import FileMetadata, ParsedOutput
 from backend.processing.bedrock_client import invoke_claude_haiku, parse_json_response
-from backend.processing.e2b_sandbox import execute_excel_analysis
+from backend.processing.local_sandbox import execute_excel_analysis
 from backend.utils.logger import append_job_log, get_logger
 
 logger = get_logger("excel_agent")
-
-LCA_KEYWORDS = [
-    "Impact Category", "CO2", "GWP", "Functional Unit", "Process",
-    "Ecoinvent", "CO2 eq", "kg CO2", "MJ", "LCA", "emission",
-    "inventory", "impact", "characterisation", "normalisation",
-    "global warming", "acidification", "eutrophication", "ozone",
-    "ecotoxicity", "human toxicity", "land use", "water",
-]
 
 
 class ExcelAgent(BaseAgent):
@@ -50,7 +42,7 @@ class ExcelAgent(BaseAgent):
                     agent=self.agent_name,
                     markdown=markdown,
                     structured_json=parsed,
-                    lca_relevant=parsed.get("lca_data_found", False),
+                    lca_relevant=True,  # Let downstream analysis determine relevance
                     confidence=0.95,
                     word_count=len(markdown.split()),
                 )
@@ -76,7 +68,7 @@ class ExcelAgent(BaseAgent):
                     agent=self.agent_name,
                     markdown=markdown,
                     structured_json=parsed,
-                    lca_relevant=parsed.get("lca_data_found", False),
+                    lca_relevant=True,
                     confidence=0.80,
                     word_count=len(markdown.split()),
                 )
@@ -135,11 +127,10 @@ class ExcelAgent(BaseAgent):
 4. Sample headers per sheet: {json.dumps(sample_headers)}
 5. For each non-empty sheet:
    - Convert to a Markdown table using df.to_markdown()
-   - Check columns for LCA keywords: {LCA_KEYWORDS}
-   - If LCA columns found, flag lca_relevant=True and extract summary stats
+   - Count the number of rows and columns
 6. Output a single JSON object to stdout with keys:
-   - sheets: list of {{name, markdown, lca_relevant, columns}}
-   - lca_data_found: bool
+   - sheets: list of {{name, markdown, columns, row_count}}
+   - data_found: bool (true if any sheet has data)
    - errors: list of strings
 7. Contains NO network calls, NO shell commands, NO file system access beyond reading /home/user/input_file
 8. Import pandas, json, sys at the top
@@ -167,10 +158,8 @@ import sys
 
 try:
     sheets_data = pd.read_excel("/home/user/input_file", sheet_name=None)
-    result = {"sheets": [], "lca_data_found": False, "errors": []}
-    
-    lca_keywords = ["impact", "co2", "gwp", "emission", "lca", "energy", "kg", "mj"]
-    
+    result = {"sheets": [], "data_found": False, "errors": []}
+
     for name, df in sheets_data.items():
         if df.empty:
             continue
@@ -178,29 +167,25 @@ try:
             md = df.to_markdown(index=False)
         except Exception:
             md = df.to_string()
-        
-        cols = [str(c).lower() for c in df.columns]
-        lca_rel = any(kw in " ".join(cols) for kw in lca_keywords)
-        if lca_rel:
-            result["lca_data_found"] = True
-        
+
         result["sheets"].append({
             "name": str(name),
             "markdown": md,
-            "lca_relevant": lca_rel,
-            "columns": list(df.columns.astype(str))
+            "columns": list(df.columns.astype(str)),
+            "row_count": len(df)
         })
-    
+        result["data_found"] = True
+
     print(json.dumps(result))
 except Exception as e:
-    print(json.dumps({"sheets": [], "lca_data_found": False, "errors": [str(e)]}))
+    print(json.dumps({"sheets": [], "data_found": False, "errors": [str(e)]}))
 '''
 
     def _openpyxl_fallback(self, file_meta: FileMetadata, file_bytes: bytes) -> ParsedOutput:
         """Attempt 3: Local openpyxl-based parsing."""
         markdown_parts = []
-        structured = {"sheets": [], "lca_data_found": False, "errors": []}
-        lca_found = False
+        structured = {"sheets": [], "data_found": False, "errors": []}
+        data_found = False
 
         try:
             import openpyxl
@@ -214,6 +199,8 @@ except Exception as e:
 
                 if not rows or all(all(c == "" for c in row) for row in rows):
                     continue
+
+                data_found = True
 
                 # Build Markdown table
                 md_lines = [f"## Sheet: {name}\n"]
@@ -229,24 +216,18 @@ except Exception as e:
                 md = "\n".join(md_lines)
                 markdown_parts.append(md)
 
-                # Check for LCA relevance
-                all_text = " ".join(str(c).lower() for row in rows for c in row)
-                lca_rel = any(kw.lower() in all_text for kw in LCA_KEYWORDS)
-                if lca_rel:
-                    lca_found = True
-
                 structured["sheets"].append({
                     "name": name,
                     "markdown": md,
-                    "lca_relevant": lca_rel,
                     "columns": rows[0] if rows else [],
+                    "row_count": len(rows) - 1 if rows else 0,
                 })
 
             wb.close()
         except Exception as e:
             structured["errors"].append(str(e))
 
-        structured["lca_data_found"] = lca_found
+        structured["data_found"] = data_found
         full_md = "\n\n".join(markdown_parts) if markdown_parts else "# No data extracted"
 
         return ParsedOutput(
@@ -255,7 +236,7 @@ except Exception as e:
             agent=self.agent_name,
             markdown=full_md,
             structured_json=structured,
-            lca_relevant=lca_found,
+            lca_relevant=True,  # Let downstream analysis determine relevance
             confidence=0.70,
             word_count=len(full_md.split()),
         )
@@ -266,6 +247,6 @@ except Exception as e:
         for sheet in parsed.get("sheets", []):
             name = sheet.get("name", "Unknown")
             md = sheet.get("markdown", "")
-            lca = " *(LCA relevant)*" if sheet.get("lca_relevant") else ""
-            parts.append(f"## Sheet: {name}{lca}\n\n{md}")
+            row_count = sheet.get("row_count", 0)
+            parts.append(f"## Sheet: {name} ({row_count} rows)\n\n{md}")
         return "\n\n".join(parts) if parts else "# No data extracted"

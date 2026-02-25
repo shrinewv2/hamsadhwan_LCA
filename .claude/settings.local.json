@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(venvScriptsuvicorn:*)",
+      "Bash(./venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(curl:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(timeout /t 8 /nobreak)"
+    ]
+  }
+}

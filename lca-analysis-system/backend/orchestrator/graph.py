@@ -193,7 +193,7 @@ async def validation_node(state: AgentState) -> dict[str, Any]:
             "cross_doc_conflicts": [],  # Will be filled in synthesis
             "plausibility_flags": plausibility_flags,
             "data_quality_rating": dq_rating,
-            "llm_confidence_score": llm_result.get("taxonomy", {}).get("completeness_score", 0) / 100.0,
+            "llm_confidence_score": (llm_result.get("taxonomy", {}).get("completeness_score") or 0) / 100.0,
         }
         validation_reports.append(report)
 

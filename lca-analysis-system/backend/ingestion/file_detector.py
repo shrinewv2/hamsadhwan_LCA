@@ -1,5 +1,7 @@
 """Magic-byte file type detection for uploaded files."""
 import io
+import os
+import sys
 import zipfile
 from typing import Optional
 
@@ -7,6 +9,17 @@ from backend.models.enums import FileType
 from backend.utils.logger import get_logger
 
 logger = get_logger("file_detector")
+
+# Check if python-magic is available (skip on Windows due to DLL issues)
+_magic_available = False
+if sys.platform != "win32":
+    try:
+        import magic as _magic_module
+        # Test that it actually works
+        _magic_module.from_buffer(b"test", mime=True)
+        _magic_available = True
+    except Exception:
+        pass
 
 # MIME to FileType mapping
 MIME_MAP = {
@@ -31,18 +44,21 @@ MIME_MAP = {
 def detect_file_type(file_bytes: bytes, filename: str = "") -> tuple[FileType, str]:
     """
     Detect actual file type from magic bytes, not file extension.
-    
+
     Returns:
         Tuple of (FileType, detected_mime_string)
     """
-    try:
-        import magic
-        mime = magic.from_buffer(file_bytes[:2048], mime=True)
-    except ImportError:
-        logger.warning("python-magic not installed, falling back to extension-based detection")
-        mime = _fallback_mime_from_extension(filename)
-    except Exception as e:
-        logger.warning("magic detection failed", error=str(e))
+    mime = None
+    # Try magic-byte detection (skip if not available)
+    if _magic_available:
+        try:
+            mime = _magic_module.from_buffer(file_bytes[:2048], mime=True)
+        except Exception as e:
+            logger.warning("magic detection failed", error=str(e))
+
+    # Fallback to extension-based detection
+    if mime is None:
+        logger.debug("using extension-based file type detection")
         mime = _fallback_mime_from_extension(filename)
 
     file_type = MIME_MAP.get(mime, FileType.UNKNOWN)

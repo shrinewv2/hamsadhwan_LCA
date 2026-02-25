@@ -221,7 +221,7 @@ class PDFHybridAgent(BaseAgent):
                 # Two-pass VLM
                 classification = classify_image(img_bytes)
                 visual_type = classification.get("visual_type", "other")
-                vlm_conf = classification.get("confidence", 3) / 5.0
+                vlm_conf = (classification.get("confidence") or 3) / 5.0
 
                 extraction = extract_from_image(img_bytes, visual_type)
 
@@ -260,7 +260,7 @@ class PDFHybridAgent(BaseAgent):
                     "content": extraction,
                     "y_pos": 0.5,  # Approximate mid-page
                 })
-                img_conf += classification.get("confidence", 3) / 5.0
+                img_conf += (classification.get("confidence") or 3) / 5.0
                 img_count += 1
             except Exception:
                 pass

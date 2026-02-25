@@ -4,12 +4,13 @@ from typing import Any, Dict, Optional
 import boto3
 from botocore.exceptions import ClientError
 
-from backend.config import settings
+from backend.config import get_settings
 
 
 def _get_opensearch_client():
     """Get OpenSearch client (stubbed — uses boto3 OpenSearch service)."""
-    if not settings or not settings.OPENSEARCH_ENDPOINT:
+    cfg = get_settings()
+    if not cfg.OPENSEARCH_ENDPOINT:
         return None
     # In production, use opensearch-py or requests with SigV4 auth
     return None

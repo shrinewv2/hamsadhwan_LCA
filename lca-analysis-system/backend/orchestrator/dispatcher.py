@@ -10,7 +10,7 @@ from backend.agents.generic_agent import GenericAgent
 from backend.agents.image_agent import ImageAgent
 from backend.agents.mindmap_agent import MindMapAgent
 from backend.agents.pdf_agent import PDFHybridAgent, PDFScannedAgent, PDFTextAgent
-from backend.config import settings
+from backend.config import get_settings
 from backend.models.enums import AgentType, FileStatus, FileType
 from backend.models.schemas import FileMetadata
 from backend.storage.dynamo_client import update_file_record
@@ -67,8 +67,9 @@ async def dispatch_file(task: dict[str, Any]) -> dict[str, Any]:
         await update_file_record(file_id, {"status": "PROCESSING", "agent": agent_name})
 
         # Download file bytes from S3
+        cfg = get_settings()
         file_bytes = download_bytes(
-            settings.S3_BUCKET_UPLOADS if settings else "lca-uploads",
+            cfg.S3_BUCKET_UPLOADS,
             s3_key,
         )
 

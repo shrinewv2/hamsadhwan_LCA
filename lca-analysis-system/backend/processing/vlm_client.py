@@ -1,11 +1,11 @@
-"""Claude Vision wrapper using AWS Bedrock for image analysis."""
+"""Vision model wrapper using AWS Bedrock for image analysis."""
 import base64
 import json
 from typing import Any, Dict, Optional
 
 import boto3
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.utils.logger import get_logger
 from backend.utils.retry import retry_with_backoff
 
@@ -14,13 +14,14 @@ logger = get_logger("vlm_client")
 
 def _get_bedrock_client():
     """Get Bedrock Runtime client for vision tasks."""
-    if settings and settings.MOCK_AWS:
+    cfg = get_settings()
+    if cfg.MOCK_AWS:
         return None
     return boto3.client(
         "bedrock-runtime",
-        region_name=settings.BEDROCK_REGION if settings else "us-east-1",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID if settings else None,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY if settings else None,
+        region_name=cfg.BEDROCK_REGION,
+        aws_access_key_id=cfg.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=cfg.AWS_SECRET_ACCESS_KEY,
     )
 
 
@@ -47,19 +48,20 @@ def invoke_vision(
     temperature: float = 0.0,
 ) -> str:
     """
-    Send an image to Claude Vision via Bedrock and get a text response.
-    
+    Send an image to Vision model via Bedrock and get a text response.
+
     Args:
         image_bytes: Raw image bytes (PNG, JPEG, WebP, TIFF).
         prompt: User message text to accompany the image.
         system_prompt: Optional system message.
         max_tokens: Maximum response tokens.
         temperature: Sampling temperature.
-    
+
     Returns:
         The model's text response.
     """
     client = _get_bedrock_client()
+    cfg = get_settings()
     if client is None:
         logger.warning("vlm_mock_mode")
         return json.dumps({
@@ -69,7 +71,7 @@ def invoke_vision(
             "extracted_content": "Mock content from image analysis"
         })
 
-    model_id = settings.BEDROCK_MODEL_VISION if settings else "anthropic.claude-sonnet-4-6"
+    model_id = cfg.BEDROCK_MODEL_VISION
     media_type = _get_media_type(image_bytes)
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -115,7 +117,7 @@ def classify_image(image_bytes: bytes) -> Dict[str, Any]:
     Returns: {"visual_type": str, "confidence": int (1-5), "brief_description": str}
     """
     system_prompt = (
-        "You are an LCA (Life Cycle Assessment) document analyst specialising in visual content extraction. "
+        "You are a document analyst specializing in visual content extraction. "
         "Classify the type of visual content in this image."
     )
     user_prompt = (
@@ -124,11 +126,13 @@ def classify_image(image_bytes: bytes) -> Dict[str, Any]:
         "- pie_chart — pie or donut chart\n"
         "- line_chart — line or area chart\n"
         "- table_screenshot — a photograph or screenshot of a table\n"
-        "- system_boundary_diagram — boxes and arrows showing a product system\n"
-        "- process_flowchart — flowchart with decision nodes\n"
+        "- diagram — boxes and arrows showing a system or process\n"
+        "- flowchart — flowchart with decision nodes\n"
         "- mind_map — radial or hierarchical mind map\n"
         "- equation — mathematical formula or calculation\n"
-        "- photograph — real-world photograph of a product, facility, or material\n"
+        "- photograph — real-world photograph\n"
+        "- infographic — informational graphic with mixed content\n"
+        "- screenshot — screenshot of software or interface\n"
         "- mixed — combination of the above\n"
         "- other — none of the above\n\n"
         "Return your answer as a JSON object with keys: visual_type, confidence (1-5), brief_description.\n"
@@ -149,7 +153,7 @@ def extract_from_image(image_bytes: bytes, visual_type: str) -> str:
     Returns Markdown-formatted extracted content.
     """
     system_prompt = (
-        "You are an LCA (Life Cycle Assessment) document analyst. "
+        "You are a document analyst. "
         "Extract all relevant data from this image in Markdown format."
     )
 
@@ -170,13 +174,13 @@ def extract_from_image(image_bytes: bytes, visual_type: str) -> str:
             "Reconstruct this table exactly as a Markdown table, preserving all column headers, row labels, and cell values. "
             "Preserve units in the header row."
         ),
-        "system_boundary_diagram": (
+        "diagram": (
             "List every box/node, every arrow and its direction, every label on arrows, and every boundary line. "
-            "Format as a structured description with sub-sections for Inputs, Processes, Outputs, and System Boundary."
+            "Format as a structured description with sub-sections for Components, Connections, and Labels."
         ),
-        "process_flowchart": (
-            "List every box/node, every arrow and its direction, every label on arrows, and every boundary line. "
-            "Format as a structured description with sub-sections for Inputs, Processes, Outputs, and System Boundary."
+        "flowchart": (
+            "List every box/node, every arrow and its direction, every label on arrows, and every decision point. "
+            "Format as a structured description with sub-sections for Steps, Decisions, and Flow."
         ),
         "mind_map": (
             "Reconstruct the mind map as a nested Markdown list, preserving the hierarchy from the central node outward."
@@ -185,8 +189,13 @@ def extract_from_image(image_bytes: bytes, visual_type: str) -> str:
             "Transcribe the equation in both LaTeX syntax and plain English prose."
         ),
         "photograph": (
-            "Describe what is shown and identify any LCA-relevant context (materials, processes, transportation, "
-            "energy sources visible)."
+            "Describe what is shown in detail, identifying objects, people, locations, and any relevant context visible."
+        ),
+        "infographic": (
+            "Extract all text, data, and visual elements. Present data as tables and text as organized sections."
+        ),
+        "screenshot": (
+            "Describe the interface shown, extract all visible text, buttons, menus, and data."
         ),
     }
 

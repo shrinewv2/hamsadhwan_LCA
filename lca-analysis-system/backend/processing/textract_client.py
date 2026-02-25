@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import boto3
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.utils.logger import get_logger
 from backend.utils.retry import retry_with_backoff
 
@@ -13,13 +13,14 @@ logger = get_logger("textract_client")
 
 def _get_textract_client():
     """Get an AWS Textract client."""
-    if settings and settings.MOCK_AWS:
+    cfg = get_settings()
+    if cfg.MOCK_AWS:
         return None
     return boto3.client(
         "textract",
-        region_name=settings.TEXTRACT_REGION if settings else "us-east-1",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID if settings else None,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY if settings else None,
+        region_name=cfg.TEXTRACT_REGION,
+        aws_access_key_id=cfg.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=cfg.AWS_SECRET_ACCESS_KEY,
     )
 
 

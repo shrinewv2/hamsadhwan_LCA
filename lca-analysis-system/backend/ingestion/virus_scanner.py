@@ -1,5 +1,5 @@
 """ClamAV virus scanning integration (stub if unavailable)."""
-from backend.config import settings
+from backend.config import get_settings
 from backend.utils.logger import get_logger
 
 logger = get_logger("virus_scanner")
@@ -9,10 +9,11 @@ def scan_file(file_bytes: bytes, filename: str = "") -> dict:
     """
     Scan a file for viruses using ClamAV.
     Returns dict with 'clean' (bool) and 'details' (str).
-    
+
     If VIRUS_SCAN_ENABLED is False or ClamAV is unavailable, returns clean.
     """
-    if settings and not settings.VIRUS_SCAN_ENABLED:
+    cfg = get_settings()
+    if not cfg.VIRUS_SCAN_ENABLED:
         logger.info("virus_scan_skipped", reason="disabled_by_config")
         return {"clean": True, "details": "Scan disabled"}
 

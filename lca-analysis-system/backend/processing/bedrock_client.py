@@ -1,10 +1,10 @@
-"""Claude Sonnet/Haiku text wrapper using AWS Bedrock."""
+"""LLM text wrapper using AWS Bedrock (supports Claude, Llama, Pixtral, etc.)."""
 import json
 from typing import Any, Dict, List, Optional
 
 import boto3
 
-from backend.config import settings
+from backend.config import get_settings
 from backend.utils.logger import get_logger
 from backend.utils.retry import retry_with_backoff
 
@@ -13,13 +13,14 @@ logger = get_logger("bedrock_client")
 
 def _get_bedrock_client():
     """Get the Bedrock Runtime client."""
-    if settings and settings.MOCK_AWS:
+    cfg = get_settings()
+    if cfg.MOCK_AWS:
         return None
     return boto3.client(
         "bedrock-runtime",
-        region_name=settings.BEDROCK_REGION if settings else "us-east-1",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID if settings else None,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY if settings else None,
+        region_name=cfg.BEDROCK_REGION,
+        aws_access_key_id=cfg.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=cfg.AWS_SECRET_ACCESS_KEY,
     )
 
 
@@ -45,11 +46,12 @@ def invoke_claude(
         The model's text response.
     """
     client = _get_bedrock_client()
+    cfg = get_settings()
     if client is None:
         logger.warning("bedrock_mock_mode", detail="Returning mock response")
         return '{"mock": true, "message": "Bedrock is in mock mode"}'
 
-    model_id = model or (settings.BEDROCK_MODEL_SONNET if settings else "us.anthropic.claude-sonnet-4-6")
+    model_id = model or cfg.BEDROCK_MODEL_SONNET
 
     messages = [
         {"role": "user", "content": [{"text": prompt}]}
@@ -86,20 +88,22 @@ async def invoke_claude_sonnet(
     max_tokens: int = 4096,
     **kwargs: Any,
 ) -> str:
-    """Invoke Claude Sonnet for routing, validation, synthesis tasks.
+    """Invoke primary model (Sonnet/Llama) for routing, validation, synthesis tasks.
 
     Supports both `system_prompt=` and legacy `system=` keyword usage.
     """
     if kwargs.get("system") and not system_prompt:
         system_prompt = kwargs["system"]
 
-    model = settings.BEDROCK_MODEL_SONNET if settings else "us.anthropic.claude-sonnet-4-6"
+    cfg = get_settings()
+    model = cfg.BEDROCK_MODEL_SONNET
     return invoke_claude(prompt, system_prompt, model=model, max_tokens=max_tokens)
 
 
 def invoke_claude_haiku(prompt: str, system_prompt: str = "", max_tokens: int = 4096) -> str:
-    """Invoke Claude Haiku for code gen, per-doc summaries."""
-    model = settings.BEDROCK_MODEL_HAIKU if settings else "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    """Invoke fast model (Haiku/Scout) for code gen, per-doc summaries."""
+    cfg = get_settings()
+    model = cfg.BEDROCK_MODEL_HAIKU
     return invoke_claude(prompt, system_prompt, model=model, max_tokens=max_tokens)
 
 

@@ -5,25 +5,58 @@ from typing import Any, Dict, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+import structlog
 
-from backend.config import settings
+from backend.config import get_settings
+
+logger = structlog.get_logger(__name__)
+
+# In-memory storage for MOCK_AWS mode (no localstack required)
+_in_memory_s3: Dict[str, Dict[str, bytes]] = {}
+
+
+class InMemoryS3Client:
+    """In-memory S3 client simulator for local development."""
+
+    def put_object(self, Bucket: str, Key: str, Body: bytes, ContentType: str = None) -> None:
+        if Bucket not in _in_memory_s3:
+            _in_memory_s3[Bucket] = {}
+        _in_memory_s3[Bucket][Key] = Body
+
+    def get_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        if Bucket not in _in_memory_s3 or Key not in _in_memory_s3[Bucket]:
+            raise ClientError(
+                {"Error": {"Code": "NoSuchKey", "Message": "Key not found"}},
+                "GetObject"
+            )
+        body = _in_memory_s3[Bucket][Key]
+        return {"Body": io.BytesIO(body), "ContentType": "application/octet-stream"}
+
+    def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        if Bucket not in _in_memory_s3 or Key not in _in_memory_s3[Bucket]:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadObject"
+            )
+        return {"ContentLength": len(_in_memory_s3[Bucket][Key])}
+
+    def generate_presigned_url(self, method: str, Params: Dict[str, str], ExpiresIn: int = 3600) -> str:
+        bucket = Params.get("Bucket", "")
+        key = Params.get("Key", "")
+        return f"http://localhost:8000/mock-s3/{bucket}/{key}"
 
 
 def _get_s3_client():
-    """Get an S3 client, using localstack if MOCK_AWS is enabled."""
-    if settings and settings.MOCK_AWS:
-        return boto3.client(
-            "s3",
-            region_name=settings.AWS_REGION,
-            endpoint_url="http://localhost:4566",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
-        )
+    """Get an S3 client, using in-memory storage if MOCK_AWS is enabled."""
+    cfg = get_settings()
+    if cfg.MOCK_AWS:
+        logger.debug("using_in_memory_s3")
+        return InMemoryS3Client()
     return boto3.client(
         "s3",
-        region_name=settings.AWS_REGION if settings else "us-east-1",
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID if settings else None,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY if settings else None,
+        region_name=cfg.AWS_REGION,
+        aws_access_key_id=cfg.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=cfg.AWS_SECRET_ACCESS_KEY,
     )
 
 

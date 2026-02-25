@@ -1,6 +1,6 @@
-"""Image VLM Agent — two-pass image analysis using Claude Vision."""
+"""Image VLM Agent — two-pass image analysis using Vision models."""
 from backend.agents.base_agent import BaseAgent
-from backend.config import settings
+from backend.config import get_settings
 from backend.models.schemas import FileMetadata, ParsedOutput
 from backend.processing.vlm_client import classify_image, extract_from_image
 from backend.utils.logger import append_job_log, get_logger
@@ -30,7 +30,8 @@ class ImageVLMAgent(BaseAgent):
         )
 
         # Confidence gate
-        vlm_min = settings.VLM_MIN_CONFIDENCE if settings else 3
+        cfg = get_settings()
+        vlm_min = cfg.VLM_MIN_CONFIDENCE
         low_confidence = confidence_raw < vlm_min
         if low_confidence:
             warnings.append(
@@ -61,16 +62,11 @@ class ImageVLMAgent(BaseAgent):
 
         if low_confidence:
             markdown_parts.append(
-                "\n\n> **⚠️ Low Confidence Warning:** This extraction has low confidence "
+                "\n\n> **Warning:** This extraction has low confidence "
                 "and should be reviewed by a human analyst."
             )
 
         full_markdown = "\n".join(markdown_parts)
-
-        # Determine LCA relevance from content
-        lca_keywords = ["lca", "impact", "co2", "emission", "gwp", "energy", "functional unit", "life cycle"]
-        content_lower = (extraction + brief_desc).lower()
-        lca_relevant = any(kw in content_lower for kw in lca_keywords)
 
         return ParsedOutput(
             file_id=file_meta.file_id,
@@ -84,7 +80,7 @@ class ImageVLMAgent(BaseAgent):
                 "extracted_content": extraction,
                 "low_confidence": low_confidence,
             },
-            lca_relevant=lca_relevant,
+            lca_relevant=True,  # Let downstream analysis determine relevance
             confidence=confidence_raw / 5.0,
             low_confidence_pages=[1] if low_confidence else [],
             word_count=len(full_markdown.split()),

@@ -18,15 +18,15 @@ class Settings(BaseSettings):
 
     # AWS Bedrock (LLM + Vision)
     BEDROCK_REGION: str = Field(default="us-east-1")
-    BEDROCK_MODEL_SONNET: str = Field(default="anthropic.claude-sonnet-4-6")
-    BEDROCK_MODEL_HAIKU: str = Field(default="anthropic.claude-haiku-4-5-20251001")
-    BEDROCK_MODEL_VISION: str = Field(default="anthropic.claude-sonnet-4-6")
+    BEDROCK_MODEL_SONNET: str = Field(default="meta.llama4-maverick-17b-instruct-v1:0")
+    BEDROCK_MODEL_HAIKU: str = Field(default="meta.llama4-scout-17b-instruct-v1:0")
+    BEDROCK_MODEL_VISION: str = Field(default="huggingface-vlm-mistral-pixtral-12b-2409")
 
     # AWS Textract
     TEXTRACT_REGION: str = Field(default="us-east-1")
 
-    # E2B (Code Sandbox)
-    E2B_API_KEY: str = Field(...)
+    # Code Sandbox (local subprocess-based, no API key needed)
+    E2B_API_KEY: str = Field(default="")  # Deprecated, kept for backward compatibility
 
     # AWS S3 Buckets
     S3_BUCKET_UPLOADS: str = Field(default="lca-uploads")
